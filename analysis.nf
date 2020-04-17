@@ -46,7 +46,7 @@ else { exit 1, "No executer selected:  -profile EXECUTER,ENGINE" }
 // params tests
 if (params.profile) {
     exit 1, "--profile is WRONG use -profile" }
-if (!params.fasta &&  !params.fastq &&  !params.dir && !params.fastqPair && !params.dev) {
+if (!params.fasta &&  !params.fastq &&  !params.dir && !params.fastqPair && !params.dev && !params.rcf) {
     exit 1, "input missing, use [--fasta] [--fastq] or [--dir]"}
 if (params.fasta && params.fastq) {
     exit 1, "please us either: [--fasta] or [--fastq]"}   
@@ -107,6 +107,12 @@ if (params.watchFast5) { fast5_live_input_ch = Channel
 }
 
 if (params.samplename) { sample_name_ch = Channel.of ( params.samplename ) }
+
+if (params.rcf) {recentrifuge_ch = Channel
+    .fromPath( params.rcf, checkIfExists: true )
+    .map { file -> tuple(file.name, file)}
+    .view()
+    }
 
 /************************** 
 * DATABASES
@@ -220,6 +226,7 @@ workflow centrifuge_database_wf {
     include sourmashmeta from './modules/sourmeta' 
     include toytree from './modules/toytree'
     include filter_fastq_by_length from './modules/filter_fastq_by_length'
+    include recentrifuge from './modules/recentrifuge'
 
 /************************** 
 * SUB WORKFLOWS
@@ -229,6 +236,12 @@ workflow centrifuge_wf {
     take:   fastq_input_ch
             centrifuge_DB
     main:   centrifuge(fastq_input_ch,centrifuge_DB) 
+}
+
+workflow recentrifuge_wf {
+    take:   recentrifuge_ch
+            centrifuge_DB
+    main:   recentrifuge(recentrifuge_ch, centrifuge_DB) 
 }
 
 workflow centrifuge_illumina_wf {
@@ -482,6 +495,8 @@ workflow {
     if (params.tree_aa && params.dir && !params.fasta) { amino_acid_tree_wf(dir_input_ch) }
     if (params.tree_aa && params.dir && params.fasta) { amino_acid_tree_supp_wf(dir_input_ch, fasta_input_ch) }
     if (params.assembly_ont && params.fastq) { assembly_ont_wf(fastq_input_ch) }
+    if (params.recentrifuge && params.rcf) {recentrifuge_wf(recentrifuge_ch, centrifuge_database_wf()) }
+    
 
     // live workflows
     if (params.watchFast5 && params.samplename && params.fasta) { live_analysis_wf(sample_name_ch, fast5_live_input_ch, fasta_input_ch) }
